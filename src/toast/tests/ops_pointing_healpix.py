@@ -112,7 +112,7 @@ class PointingHealpixTest(MPITestCase):
         )
         weights_ref = []
         for quat in quats:
-            theta, phi, psi = qa.to_angles(quat)
+            theta, phi, psi = qa.to_iso(quat)
             weights_ref.append(np.array([1, np.cos(2 * psi), np.sin(2 * psi)]))
         weights_ref = np.vstack(weights_ref)
         failed = False

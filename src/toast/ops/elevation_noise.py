@@ -280,7 +280,7 @@ class ElevationNoise(Operator):
                 el_view = list()
                 for vw in range(len(views)):
                     # Detector elevation
-                    theta, _ = qa.to_position(
+                    theta, _, _ = qa.to_iso(
                         views.detdata[self.detector_pointing.quats][vw][det]
                     )
 

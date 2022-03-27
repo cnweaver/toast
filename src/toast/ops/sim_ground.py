@@ -826,15 +826,12 @@ class SimGround(Operator):
                 ]
                 # Get the motion of the site for these times.
                 position, velocity = site.position_velocity(stamps)
-                # Convert Az / El to quaternions.
-                # Remember that the azimuth is measured clockwise and the
-                # longitude counter-clockwise.
-                bore_azel = qa.from_angles(
-                    np.pi / 2 - el_data,
-                    -(az_data),
-                    np.zeros_like(el_data),
-                    IAU=False,
-                )
+                # Convert Az / El to quaternions.  Remember that the azimuth is
+                # measured clockwise and the longitude counter-clockwise.  We define
+                # the focalplane coordinate X-axis to be pointed in the direction
+                # of decreasing elevation.
+                bore_azel = qa.from_lonlat(-(az_data), el_data, np.zeros_like(el_data))
+
                 if scan.boresight_angle.to_value(u.radian) != 0:
                     zaxis = np.array([0, 0, 1.0])
                     rot = qa.rotation(zaxis, scan.boresight_angle.to_value(u.radian))

@@ -430,7 +430,7 @@ class PixelsWCS(Operator):
                     view_samples = len(quats)
 
                     # print(f"det {det} quats = {quats}")
-                    theta, phi = qa.to_position(quats)
+                    theta, phi, _ = qa.to_iso(quats)
                     # print(f"det {det} rad theta, phi = {theta}, {phi}")
 
                     to_deg = 180.0 / np.pi
@@ -502,7 +502,7 @@ class PixelsWCS(Operator):
         lat = []
         quats = obs.shared[self.detector_pointing.boresight][rank::ntask].copy()
         for idet, detquat in enumerate(detquats):
-            theta, phi = qa.to_position(qa.mult(quats, detquat))
+            theta, phi, _ = qa.to_iso(qa.mult(quats, detquat))
             if center_lonlat is None:
                 lon.append(phi)
                 lat.append(np.pi / 2 - theta)
