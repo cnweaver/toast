@@ -10,7 +10,7 @@ from scipy.constants import degree
 from .. import qarray as qa
 from ..dist import distribute_discrete
 from ..healpix import ang2vec
-from ..instrument import Telescope
+from ..instrument import Telescope, Session
 from ..noise_sim import AnalyticNoise
 from ..observation import Observation
 from ..observation import default_values as defaults
@@ -438,12 +438,22 @@ class SimSatellite(Operator):
         for obindx in range(group_firstobs, group_firstobs + group_numobs):
             scan = self.schedule.scans[obindx]
 
+            start_time = scan_starts[obindx] + float(ob.local_index_offset) / rate
+            stop_time = start_time + float(ob.n_local_samples - 1) / rate
+
+            session = Session(
+                f"{scan.name}_{int(start_time):10d}",
+                start=datetime.fromtimestamp(start_time).astimezone(timezone.utc),
+                end=datetime.fromtimestamp(stop_time).astimezone(timezone.utc),
+            )
+
             ob = Observation(
                 comm,
                 self.telescope,
                 scan_samples[obindx],
                 name=f"{scan.name}_{int(scan.start.timestamp())}",
                 uid=name_UID(scan.name),
+                session=session,
                 detector_sets=detsets,
                 process_rows=det_ranks,
             )
@@ -479,8 +489,7 @@ class SimSatellite(Operator):
             q_prec = None
 
             if ob.comm_col_rank == 0:
-                start_time = scan_starts[obindx] + float(ob.local_index_offset) / rate
-                stop_time = start_time + float(ob.n_local_samples - 1) / rate
+
                 stamps = np.linspace(
                     start_time,
                     stop_time,

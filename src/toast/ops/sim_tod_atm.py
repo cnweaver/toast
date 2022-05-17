@@ -10,7 +10,7 @@ import traitlets
 from astropy import units as u
 
 from .. import qarray as qa
-from ..atm import AtmSim, available_atm, available_utils
+from ..atm import available_atm, available_utils
 from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
@@ -296,15 +296,21 @@ class SimAtmosphere(Operator):
         else:
             temporary_view = "temporary_view"
 
-        # Observation key for storing the atmosphere sims
-        atm_sim_key = f"{self.name}_atm_sim"
+        # The atmosphere sims are created and stored for each observing session.
+        # This data key contains a dictionary of sims, keyed on session name.
+        atm_sim_key = "atm_sim"
 
-        # Observation key for storing absorption and loading
-        absorption_key = f"{self.name}_absorption"
+        # Data key for absorption and loading dictionaries
+        absorption_key = "atm_absorption"
         if self.add_loading:
-            loading_key = f"{self.name}_loading"
+            loading_key = "atm_loading"
         else:
             loading_key = None
+
+        # Split the observations according to their observing session
+        data_sessions = data.split(obs_session_name=True)
+
+        # For each session, check that the observations have
 
         # Set up the observing operator
         if self.shared_flags is None:
