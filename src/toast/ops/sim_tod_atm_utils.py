@@ -46,8 +46,8 @@ class GenerateAtmosphere(Operator):
         defaults.boresight_azel, help="Observation shared key for Az/El boresight"
     )
 
-    view = Unicode(
-        None, allow_none=True, help="Use this view of the data in all observations"
+    wind_intervals = Unicode(
+        "wind", help="Intervals to create for wind breaks"
     )
 
     shared_flags = Unicode(
@@ -69,7 +69,7 @@ class GenerateAtmosphere(Operator):
         help="Polarization fraction (only Q polarization).",
     )
 
-    turnaround_interval = Unicode("turnaround", help="Interval name for turnarounds")
+    turnaround_interval = Unicode("turnaround", allow_none=True, help="Interval name for turnarounds")
 
     realization = Int(
         0, help="If simulating multiple realizations, the realization index"
@@ -145,7 +145,7 @@ class GenerateAtmosphere(Operator):
     )
 
     cache_only = Bool(
-        False, help="If True, only cache the atmosphere, do not observe it."
+        False, help="If True, only cache the atmosphere on disk."
     )
 
     debug_spectrum = Bool(False, help="If True, dump out Kolmogorov debug files")
@@ -188,18 +188,9 @@ class GenerateAtmosphere(Operator):
         comm_node = data.comm.comm_group_node
         comm_node_rank = data.comm.comm_group_node_rank
 
-        # Name of the intervals for ranges valid for a given wind chunk
-        wind_intervals = "wind"
-
-        # Name of a view that combines user input and wind breaks
-        if self.view is None:
-            temporary_view = wind_intervals
-        else:
-            temporary_view = "temporary_view"
-
         # The atmosphere sims are created and stored for each observing session.
         # This data key contains a dictionary of sims, keyed on session name.
-        if self.output not in data:
+        if not self.cache_only and self.output not in data:
             data[self.output] = dict()
 
         # Split the observations according to their observing session.  This split
@@ -211,7 +202,8 @@ class GenerateAtmosphere(Operator):
             log_prefix = f"{group} : {sname} : "
 
             # List of simulated slabs for each wind interval
-            data[self.output][sname] = list()
+            if not self.cache_only:
+                data[self.output][sname] = list()
 
             # For each session, check that the observations have the same site.
             site = None
@@ -346,7 +338,8 @@ class GenerateAtmosphere(Operator):
                         rmin,
                         rmax,
                     )
-                    sim_list.append(sim)
+                    if not self.cache_only:
+                        sim_list.append(sim)
 
                     if self.debug_plots or self.debug_snapshots:
                         self._plot_snapshots(
@@ -368,24 +361,14 @@ class GenerateAtmosphere(Operator):
                     zstep_current *= np.sqrt(scale)
                     counter1 += 1
 
-                data[self.output][sname].append(sim_list)
-
-                if self.debug_tod:
-                    self._save_tod(ob, times, istart, nind, ind, comm)
+                if not self.cache_only:
+                    data[self.output][sname].append(sim_list)
                 tmin = tmax
 
-            # Create the wind intervals
-            ob.intervals.create_col(wind_intervals, wind_times, ob.shared[self.times])
-
-            # Create temporary intervals by combining views
-            if temporary_view != wind_intervals:
-                ob.intervals[temporary_view] = (
-                    ob.intervals[view] & ob.intervals[wind_intervals]
-                )
-
-            if temporary_view != wind_intervals:
-                del ob.intervals[temporary_view]
-            del ob.intervals[wind_intervals]
+            if not self.cache_only:
+                # Create the wind intervals
+                for ob in sdata.obs:
+                    ob.intervals.create_col(self.wind_intervals, wind_times, ob.shared[self.times])
 
     def _get_rng_keys(self, obs):
         """Get random number keys and counters for an observing session.
@@ -547,31 +530,35 @@ class GenerateAtmosphere(Operator):
 
             tmax = tmin + wind_time
             if tmax < tmax_tot:
-                # Extend the scan to the next turnaround
                 istop = istart
-                while istop < len(all_times) and all_times[istop] < tmax:
+                while istop < len(times) and times[istop] < tmax:
                     istop += 1
-                iturn = 0
-                while iturn < len(turn_ilist) - 1 and (
-                    all_times[istop] > turn_ilist[iturn].stop
-                ):
-                    iturn += 1
-                if all_times[istop] > turn_ilist[iturn].stop:
-                    # We are past the last turnaround.
-                    # Extend to the end of the observation.
-                    istop = len(all_times)
-                    tmax = tmax_tot
-                else:
-                    # Stop time is either before or in the middle of the turnaround.
-                    # Extend to the start of the turnaround.
-                    while istop < len(all_times) and (
-                        all_times[istop] < turn_ilist[iturn].start
+                # Extend the scan to the next turnaround, if we have them
+                if self.turnaround_interval is not None:
+                    iturn = 0
+                    while iturn < len(obs.intervals[self.turnaround_interval]) - 1 and (
+                        times[istop] > obs.intervals[self.turnaround_interval][iturn].stop
                     ):
-                        istop += 1
-                    if istop < len(all_times):
-                        tmax = all_times[istop]
-                    else:
+                        iturn += 1
+                    if times[istop] > obs.intervals[self.turnaround_interval][iturn].stop:
+                        # We are past the last turnaround.
+                        # Extend to the end of the observation.
+                        istop = len(times)
                         tmax = tmax_tot
+                    else:
+                        # Stop time is either before or in the middle of the turnaround.
+                        # Extend to the start of the turnaround.
+                        while istop < len(times) and (
+                            times[istop]
+                            < obs.intervals[self.turnaround_interval][iturn].start
+                        ):
+                            istop += 1
+                        if istop < len(times):
+                            tmax = times[istop]
+                        else:
+                            tmax = tmax_tot
+                else:
+                    tmax = times[istop]
             else:
                 tmax = tmax_tot
                 istop = len(all_times)
@@ -712,6 +699,115 @@ class GenerateAtmosphere(Operator):
         log.debug_rank(msg, comm=comm, timer=tmr)
         return sim, counter2
 
+    @function_timer
+    def _plot_snapshots(
+        self, sim, prefix, obsname, scan_range, tmin, tmax, comm, rmin, rmax
+    ):
+        """Create snapshots of the atmosphere"""
+        log = Logger.get()
+        from ..vis import set_matplotlib_backend
+
+        set_matplotlib_backend()
+        import pickle
+
+        import matplotlib.pyplot as plt
+
+        azmin, azmax, elmin, elmax = scan_range
+        azmin = azmin.to_value(u.radian)
+        azmax = azmax.to_value(u.radian)
+        elmin = elmin.to_value(u.radian)
+        elmax = elmax.to_value(u.radian)
+
+        # elstep = np.radians(0.01)
+        elstep = (elmax - elmin) / 320
+        azstep = elstep * np.cos(0.5 * (elmin + elmax))
+        azgrid = np.linspace(azmin, azmax, int((azmax - azmin) / azstep) + 1)
+        elgrid = np.linspace(elmin, elmax, int((elmax - elmin) / elstep) + 1)
+        AZ, EL = np.meshgrid(azgrid, elgrid)
+        nn = AZ.size
+        az = AZ.ravel()
+        el = EL.ravel()
+        atmdata = np.zeros(nn, dtype=np.float64)
+        atmtimes = np.zeros(nn, dtype=np.float64)
+
+        rank = 0
+        ntask = 1
+        if comm is not None:
+            rank = comm.rank
+            ntask = comm.size
+
+        r = 0
+        t = 0
+        my_snapshots = []
+        vmin = 1e30
+        vmax = -1e30
+        tstep = 1
+        for i, t in enumerate(np.arange(tmin, tmax, tstep)):
+            if i % ntask != rank:
+                continue
+            err = sim.observe(atmtimes + t, az, el, atmdata, r)
+            if err != 0:
+                raise RuntimeError(prefix + "Observation failed")
+            atmdata *= self.gain
+            vmin = min(vmin, np.amin(atmdata))
+            vmax = max(vmax, np.amax(atmdata))
+            atmdata2d = atmdata.reshape(AZ.shape)
+            my_snapshots.append((t, r, atmdata2d.copy()))
+
+        if self.debug_snapshots:
+            outdir = "snapshots"
+            if rank == 0:
+                try:
+                    os.makedirs(outdir)
+                except FileExistsError:
+                    pass
+            fn = os.path.join(
+                outdir,
+                "atm_{}_{}_t_{}_{}_r_{}_{}.pck".format(
+                    obsname, rank, int(tmin), int(tmax), int(rmin), int(rmax)
+                ),
+            )
+            with open(fn, "wb") as fout:
+                pickle.dump([azgrid, elgrid, my_snapshots], fout)
+
+        log.debug("Snapshots saved in {}".format(fn))
+
+        if self.debug_plots:
+            if comm is not None:
+                vmin = comm.allreduce(vmin, op=MPI.MIN)
+                vmax = comm.allreduce(vmax, op=MPI.MAX)
+
+            for t, r, atmdata2d in my_snapshots:
+                plt.figure(figsize=[12, 4])
+                plt.imshow(
+                    atmdata2d,
+                    interpolation="nearest",
+                    origin="lower",
+                    extent=np.degrees(
+                        [
+                            0,
+                            (azmax - azmin) * np.cos(0.5 * (elmin + elmax)),
+                            elmin,
+                            elmax,
+                        ]
+                    ),
+                    cmap=plt.get_cmap("Blues"),
+                    vmin=vmin,
+                    vmax=vmax,
+                )
+                plt.colorbar()
+                ax = plt.gca()
+                ax.set_title("t = {:15.1f} s, r = {:15.1f} m".format(t, r))
+                ax.set_xlabel("az [deg]")
+                ax.set_ylabel("el [deg]")
+                ax.set_yticks(np.degrees([elmin, elmax]))
+                plt.savefig(
+                    "atm_{}_t_{:04}_r_{:04}.png".format(obsname, int(t), int(r))
+                )
+                plt.close()
+
+        del my_snapshots
+
     def _finalize(self, data, **kwargs):
         return
 
@@ -735,7 +831,7 @@ class GenerateAtmosphere(Operator):
     def _provides(self):
         prov = {
             "global": [self.output],
-            "meta": list(),
+            "meta": [self.wind_intervals],
             "shared": list(),
             "detdata": list(),
         }
