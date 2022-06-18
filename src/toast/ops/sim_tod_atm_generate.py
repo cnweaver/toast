@@ -4,6 +4,7 @@
 
 import os
 
+import healpy as hp
 import numpy as np
 import scipy.interpolate
 import traitlets
@@ -59,11 +60,6 @@ class GenerateAtmosphere(Operator):
 
     output = Unicode(
         "atm_sim", help="Data key to store the dictionary of sims per session"
-    )
-
-    polarization_fraction = Float(
-        0,
-        help="Polarization fraction (only Q polarization).",
     )
 
     turnaround_interval = Unicode("turnaround", allow_none=True, help="Interval name for turnarounds")
@@ -254,9 +250,7 @@ class GenerateAtmosphere(Operator):
             elmin = None
             elmax = None
             for ob in sdata.obs:
-                ob_azmin, ob_azmax, ob_elmin, ob_elmax = self._get_scan_range(
-                    first_obs, comm
-                )
+                ob_azmin, ob_azmax, ob_elmin, ob_elmax = self._get_scan_range(first_obs)
                 if azmin is None:
                     azmin = ob_azmin
                     azmax = ob_azmax
@@ -267,6 +261,7 @@ class GenerateAtmosphere(Operator):
                     azmax = np.max(azmax, ob_azmax)
                     elmin = np.min(elmin, ob_elmin)
                     elmax = np.max(elmax, ob_elmax)
+            scan_range = (azmin, azmax, elmin, elmax)
 
             # Loop over the time span in "wind_time"-sized chunks.
             # wind_time is intended to reflect the correlation length

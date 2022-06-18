@@ -164,14 +164,10 @@ class ObserveAtmosphere(Operator):
             session_name = ob.session.name
 
             gt.start("ObserveAtmosphere:  per-observation setup")
-            # Compute the (common) absorption and loading
-            common_absorption, common_loading = self._common_absorption_and_loading(
-                ob, comm
-            )
 
             # Bandpass-specific unit conversion, relative to 150GHz
-            absorption, loading = self._get_absorption_and_loading(
-                ob, common_absorption, common_loading, dets
+            absorption, loading = self._detector_absorption_and_loading(
+                ob, ob[self.absorption], ob[self.loading], dets
             )
 
             # Make sure detector data output exists
@@ -212,7 +208,7 @@ class ObserveAtmosphere(Operator):
                         & self.shared_flag_mask
                     )
 
-                sim_list = ob[self.sim][session_name][cur_wind]
+                sim_list = data[self.sim][session_name][cur_wind]
 
                 for det in dets:
                     gt.start("ObserveAtmosphere:  detector setup")
@@ -498,67 +494,6 @@ class ObserveAtmosphere(Operator):
                     f"{log_prefix}: Observe atmosphere FAILED on {frac:.2f}% of samples"
                 )
         gt.stop("ObserveAtmosphere:  total")
-
-    @function_timer
-    def _common_absorption_and_loading(self, obs, comm):
-        """Compute the (common) absorption and loading prior to bandpass convolution.
-
-        Args:
-            obs (Observation):  One observation in the session.
-            comm (MPI.Comm):  Optional communicator over which to distribute the
-                calculations.
-
-        Returns:
-            (tuple):  The absorption, loading vectors for the observation.
-
-        """
-
-        if obs.telescope.focalplane.bandpass is None:
-            raise RuntimeError("Focalplane does not define bandpass")
-        altitude = obs.telescope.site.earthloc.height
-        weather = obs.telescope.site.weather
-        bandpass = obs.telescope.focalplane.bandpass
-
-        freq_min, freq_max = bandpass.get_range()
-        n_freq = self.n_bandpass_freqs
-        freqs = np.linspace(freq_min, freq_max, n_freq)
-        if comm is None:
-            ntask = 1
-            my_rank = 0
-        else:
-            ntask = comm.size
-            my_rank = comm.rank
-        n_freq_task = int(np.ceil(n_freq / ntask))
-        my_start = min(my_rank * n_freq_task, n_freq)
-        my_stop = min(my_start + n_freq_task, n_freq)
-        my_n_freq = my_stop - my_start
-
-        if my_n_freq > 0:
-            absorption = atm_absorption_coefficient_vec(
-                altitude.to_value(u.meter),
-                weather.air_temperature.to_value(u.Kelvin),
-                weather.surface_pressure.to_value(u.Pa),
-                weather.pwv.to_value(u.mm),
-                freqs[my_start].to_value(u.GHz),
-                freqs[my_stop - 1].to_value(u.GHz),
-                my_n_freq,
-            )
-            loading = atm_atmospheric_loading_vec(
-                altitude.to_value(u.meter),
-                weather.air_temperature.to_value(u.Kelvin),
-                weather.surface_pressure.to_value(u.Pa),
-                weather.pwv.to_value(u.mm),
-                freqs[my_start].to_value(u.GHz),
-                freqs[my_stop - 1].to_value(u.GHz),
-                my_n_freq,
-            )
-        else:
-            absorption, loading = [], []
-
-        if comm is not None:
-            absorption = np.hstack(comm.allgather(absorption))
-            loading = np.hstack(comm.allgather(loading))
-        return (absorption, loading)
 
     @function_timer
     def _detector_absorption_and_loading(self, obs, absorption, loading, dets):

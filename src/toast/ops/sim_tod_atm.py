@@ -19,7 +19,8 @@ from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
 from ..utils import Environment, Logger, Timer
 from .operator import Operator
 from .pipeline import Pipeline
-from .sim_tod_atm_utils import ObserveAtmosphere
+from .sim_tod_atm_generate import GenerateAtmosphere
+from .sim_tod_atm_observe import ObserveAtmosphere
 
 if available_atm:
     from ..atm import AtmSim
@@ -303,12 +304,11 @@ class SimAtmosphere(Operator):
         # Generate (or load) the atmosphere realizations for all sessions
         gen_atm = GenerateAtmosphere(
             times=self.times,
-            boresight=self.boresight_azel,
+            boresight=self.detector_pointing.boresight,
             wind_intervals=wind_intervals,
             shared_flags=self.shared_flags,
             shared_flag_mask=self.shared_flag_mask,
             output=atm_sim_key,
-            polarization_fraction=self.polarization_fraction,
             turnaround_interval=self.turnaround_interval,
             realization=self.realization,
             component=self.component,
@@ -397,6 +397,9 @@ class SimAtmosphere(Operator):
                 # Nothing to do for this observation
                 continue
 
+            tmr = Timer()
+            tmr.start()
+
             # Prefix for logging
             log_prefix = f"{group} : {ob.name} : "
 
@@ -420,7 +423,7 @@ class SimAtmosphere(Operator):
                         raise RuntimeError(msg)
 
             # Compute the absorption and loading for this observation
-            self._compute_absorption_and_loading(ob, absorption_key, loading_key, comm)
+            self._common_absorption_and_loading(ob, absorption_key, loading_key, comm)
 
             # Create temporary intervals by combining views
             if temporary_view != wind_intervals:
@@ -459,11 +462,64 @@ class SimAtmosphere(Operator):
             del ob.intervals[wind_intervals]
 
         # Delete the atmosphere slabs for all sessions
-        for sname in list(ob[atm_sim_key].keys()):
-            for slab in ob[atm_sim_key][sname]:
-                slab.close()
-            del ob[atm_sim_key][sname]
-        del ob[atm_sim_key]
+        for sname in list(data[atm_sim_key].keys()):
+            for wind_slabs in data[atm_sim_key][sname]:
+                for slab in wind_slabs:
+                    slab.close()
+            del data[atm_sim_key][sname]
+        del data[atm_sim_key]
+
+    @function_timer
+    def _common_absorption_and_loading(self, obs, absorption_key, loading_key, comm):
+        """Compute the (common) absorption and loading prior to bandpass convolution."""
+
+        if obs.telescope.focalplane.bandpass is None:
+            raise RuntimeError("Focalplane does not define bandpass")
+        altitude = obs.telescope.site.earthloc.height
+        weather = obs.telescope.site.weather
+        bandpass = obs.telescope.focalplane.bandpass
+
+        freq_min, freq_max = bandpass.get_range()
+        n_freq = self.n_bandpass_freqs
+        freqs = np.linspace(freq_min, freq_max, n_freq)
+        if comm is None:
+            ntask = 1
+            my_rank = 0
+        else:
+            ntask = comm.size
+            my_rank = comm.rank
+        n_freq_task = int(np.ceil(n_freq / ntask))
+        my_start = min(my_rank * n_freq_task, n_freq)
+        my_stop = min(my_start + n_freq_task, n_freq)
+        my_n_freq = my_stop - my_start
+
+        if my_n_freq > 0:
+            absorption = atm_absorption_coefficient_vec(
+                altitude.to_value(u.meter),
+                weather.air_temperature.to_value(u.Kelvin),
+                weather.surface_pressure.to_value(u.Pa),
+                weather.pwv.to_value(u.mm),
+                freqs[my_start].to_value(u.GHz),
+                freqs[my_stop - 1].to_value(u.GHz),
+                my_n_freq,
+            )
+            loading = atm_atmospheric_loading_vec(
+                altitude.to_value(u.meter),
+                weather.air_temperature.to_value(u.Kelvin),
+                weather.surface_pressure.to_value(u.Pa),
+                weather.pwv.to_value(u.mm),
+                freqs[my_start].to_value(u.GHz),
+                freqs[my_stop - 1].to_value(u.GHz),
+                my_n_freq,
+            )
+        else:
+            absorption, loading = [], []
+
+        if comm is not None:
+            absorption = np.hstack(comm.allgather(absorption))
+            loading = np.hstack(comm.allgather(loading))
+        obs[absorption_key] = absorption
+        obs[loading_key] = loading
 
     def _finalize(self, data, **kwargs):
         return
