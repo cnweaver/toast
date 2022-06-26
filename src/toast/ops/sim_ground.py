@@ -725,7 +725,7 @@ class SimGround(Operator):
             name = f"{scan.name}-{scan.scan_indx}-{scan.subscan_indx}"
 
             session = Session(
-                f"{scan.name}_{int(times[0]):10d}",
+                name,
                 start=datetime.fromtimestamp(times[0]).astimezone(timezone.utc),
                 end=datetime.fromtimestamp(times[-1]).astimezone(timezone.utc),
             )
