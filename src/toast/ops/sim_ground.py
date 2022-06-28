@@ -430,6 +430,9 @@ class SimGround(Operator):
         # observation to the next, for simulations there is no need to restart the
         # sampling clock each observation.
 
+        if len(self.schedule.scans) == 0:
+            raise RuntimeError("Schedule has no scans!")
+
         scan_starts = list()
         scan_stops = list()
         scan_offsets = list()

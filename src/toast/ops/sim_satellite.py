@@ -405,6 +405,9 @@ class SimSatellite(Operator):
         # continuous sampling and find the actual start / stop times for the samples
         # that fall in each scan time range.
 
+        if len(self.schedule.scans) == 0:
+            raise RuntimeError("Schedule has no scans!")
+
         scan_starts = list()
         scan_stops = list()
         scan_offsets = list()

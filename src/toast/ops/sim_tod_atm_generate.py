@@ -510,6 +510,8 @@ class GenerateAtmosphere(Operator):
         # FIXME:  The code below is explicitly looping over numpy arrays.  If this is
         # too slow, we should move to using numpy functions like searchsorted, etc.
 
+        istop = None
+        tmax = None
         if obs.comm.group_rank == 0:
             while all_times[istart] < tmin:
                 istart += 1
