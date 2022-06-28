@@ -5,6 +5,7 @@
 import numpy as np
 import traitlets
 from astropy import units as u
+from datetime import datetime, timezone, timedelta
 from scipy.constants import degree
 
 from .. import qarray as qa
@@ -438,13 +439,13 @@ class SimSatellite(Operator):
         for obindx in range(group_firstobs, group_firstobs + group_numobs):
             scan = self.schedule.scans[obindx]
 
-            start_time = scan_starts[obindx] + float(ob.local_index_offset) / rate
-            stop_time = start_time + float(ob.n_local_samples - 1) / rate
+            ses_start = scan_starts[obindx]
+            ses_end = + float(scan_samples[obindx] - 1) / rate
 
             session = Session(
-                f"{scan.name}_{int(start_time):10d}",
-                start=datetime.fromtimestamp(start_time).astimezone(timezone.utc),
-                end=datetime.fromtimestamp(stop_time).astimezone(timezone.utc),
+                f"{scan.name}_{int(ses_start):10d}",
+                start=datetime.fromtimestamp(ses_start).astimezone(timezone.utc),
+                end=datetime.fromtimestamp(ses_end).astimezone(timezone.utc),
             )
 
             ob = Observation(
@@ -489,6 +490,9 @@ class SimSatellite(Operator):
             q_prec = None
 
             if ob.comm_col_rank == 0:
+
+                start_time = scan_starts[obindx] + float(ob.local_index_offset) / rate
+                stop_time = start_time + float(ob.n_local_samples - 1) / rate
 
                 stamps = np.linspace(
                     start_time,
