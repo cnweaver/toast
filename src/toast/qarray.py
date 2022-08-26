@@ -11,6 +11,7 @@ from ._libtoast import (
     qa_exp,
     qa_from_angles,
     qa_from_axisangle,
+    qa_from_iso,
     qa_from_position,
     qa_from_rotmat,
     qa_from_vectors,
@@ -23,10 +24,9 @@ from ._libtoast import (
     qa_slerp,
     qa_to_angles,
     qa_to_axisangle,
+    qa_to_iso,
     qa_to_position,
     qa_to_rotmat,
-    qa_from_iso,
-    qa_to_iso,
 )
 from .utils import AlignedF64, Logger, ensure_buffer_f64, object_ndim
 

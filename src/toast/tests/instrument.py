@@ -10,13 +10,13 @@ from astropy import units as u
 from astropy.table import Column, QTable
 
 from ..instrument import Focalplane
-from ..instrument_coords import xieta_to_iso, iso_to_xieta, quat_to_xieta, xieta_to_quat
+from ..instrument_coords import iso_to_xieta, quat_to_xieta, xieta_to_iso, xieta_to_quat
 from ..instrument_sim import (
-    hex_layout,
-    hex_gamma_angles_radial,
-    hex_gamma_angles_qu,
     fake_hexagon_focalplane,
     fake_rhombihex_focalplane,
+    hex_gamma_angles_qu,
+    hex_gamma_angles_radial,
+    hex_layout,
 )
 from ..io import H5File
 from ._helpers import create_outdir

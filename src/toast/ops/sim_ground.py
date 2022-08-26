@@ -3,7 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import copy
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import traitlets
@@ -14,7 +14,7 @@ from .. import qarray as qa
 from ..coordinates import azel_to_radec
 from ..dist import distribute_discrete, distribute_uniform
 from ..healpix import ang2vec
-from ..instrument import Telescope, Session
+from ..instrument import Session, Telescope
 from ..intervals import IntervalList, regular_intervals
 from ..noise_sim import AnalyticNoise
 from ..observation import Observation

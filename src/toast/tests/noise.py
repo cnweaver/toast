@@ -17,7 +17,6 @@ from ..noise import Noise
 from ..noise_sim import AnalyticNoise
 from ._helpers import create_outdir, create_satellite_data
 from .mpi import MPITestCase
-
 from .ops_noise_estim import plot_noise_estim_compare
 
 

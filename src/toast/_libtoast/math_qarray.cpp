@@ -593,7 +593,6 @@ void init_math_qarray(py::module & m) {
     m.def(
         "qa_from_iso", [](py::buffer theta, py::buffer phi,
                           py::buffer psi, py::buffer out) {
-
             // This is used to return the actual shape of each buffer
             std::vector <int64_t> temp_shape(1);
 
@@ -655,7 +654,8 @@ void init_math_qarray(py::module & m) {
                 }
             }
             return;
-        }, py::arg("theta"), py::arg("phi"), py::arg("psi"), py::arg("out"), R"(
+        }, py::arg("theta"), py::arg("phi"), py::arg("psi"), py::arg(
+            "out"), R"(
         Create quaternions from ISO spherical coordinate rotations.
 
         The theta, phi, psi angles describe standard ZYZ rotations:  a phi rotation
@@ -678,7 +678,6 @@ void init_math_qarray(py::module & m) {
     m.def(
         "qa_to_iso", [](py::buffer q, py::buffer theta, py::buffer phi,
                         py::buffer psi) {
-
             double const xaxis[3] = {1.0, 0.0, 0.0};
             double const zaxis[3] = {0.0, 0.0, 1.0};
 
@@ -708,9 +707,11 @@ void init_math_qarray(py::module & m) {
                 double qtemp[4];
                 double dir[3];
                 double orient[3];
+
                 // The X/Y cartesian coordinates of the line of nodes
                 double nodes_x;
                 double nodes_y;
+
                 // Angle from original X axis to the line of nodes
                 double eps = std::numeric_limits <double>::epsilon();
 
@@ -738,6 +739,7 @@ void init_math_qarray(py::module & m) {
                     } else {
                         raw_phi[i] = ::atan2(dir[1], dir[0]);
                         raw_theta[i] = toast::PI_2 - ::asin(dir[2]);
+
                         // psi = atan2((V_nodes x V_orient) . V_dir, V_nodes . V_orient)
                         // Line of nodes is the rotated Y-axis
                         nodes_x = ::cos(toast::PI_2 + raw_phi[i]);
@@ -747,19 +749,20 @@ void init_math_qarray(py::module & m) {
                             - nodes_x * orient[2] * dir[1]
                             + (nodes_x * orient[1] - nodes_y * orient[0]) * dir[2],
                             nodes_x * orient[0] + nodes_y * orient[1]
-                        ) + toast::PI_2;
+                                     ) + toast::PI_2;
                     }
                     if (raw_psi[i] > toast::PI) {
                         raw_psi[i] -= toast::TWOPI;
                     }
-                    if (raw_psi[i] <= - toast::PI) {
+                    if (raw_psi[i] <= -toast::PI) {
                         raw_psi[i] += toast::TWOPI;
                     }
                 }
             }
 
             return;
-        }, py::arg("q"), py::arg("theta"), py::arg("phi"), py::arg("psi"), R"(
+        }, py::arg("q"), py::arg("theta"), py::arg("phi"), py::arg(
+            "psi"), R"(
         Convert quaternions to ISO spherical coordinates.
 
         The theta, phi, psi angles describe standard ZYZ rotations:  a phi rotation

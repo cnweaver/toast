@@ -2,16 +2,17 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from datetime import datetime, timedelta, timezone
+
 import numpy as np
 import traitlets
 from astropy import units as u
-from datetime import datetime, timezone, timedelta
 from scipy.constants import degree
 
 from .. import qarray as qa
 from ..dist import distribute_discrete
 from ..healpix import ang2vec
-from ..instrument import Telescope, Session
+from ..instrument import Session, Telescope
 from ..noise_sim import AnalyticNoise
 from ..observation import Observation
 from ..observation import default_values as defaults

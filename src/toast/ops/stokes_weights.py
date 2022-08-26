@@ -336,8 +336,8 @@ class StokesWeights(Operator):
                     dir_ang = np.arctan2(dir[:, 1], dir[:, 0])
                     dir_r = np.sqrt(1.0 - dir[:, 2] * dir[:, 2])
                     m_z = dir_r
-                    m_x = - dir[:, 2] * np.cos(dir_ang)
-                    m_y = - dir[:, 2] * np.sin(dir_ang)
+                    m_x = -dir[:, 2] * np.cos(dir_ang)
+                    m_y = -dir[:, 2] * np.sin(dir_ang)
 
                     # Compute the rotation angle from the meridian vector to the
                     # orientation vector.  The direction vector is normal to the plane
