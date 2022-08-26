@@ -45,7 +45,7 @@ class PointingHealpixTest(MPITestCase):
         xaxis, yaxis, zaxis = np.eye(3)
         for phi in phivec:
             phirot = qa.rotation(zaxis, phi)
-            quats.append(qa.from_angles(theta, phi, psi))
+            quats.append(qa.from_iso(theta, phi, psi))
         quats = np.vstack(quats)
         healpix_pixels(
             hpix,

@@ -18,6 +18,8 @@ from ..noise_sim import AnalyticNoise
 from ._helpers import create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
+from .ops_noise_estim import plot_noise_estim_compare
+
 
 class InstrumentTest(MPITestCase):
     def setUp(self):
@@ -193,4 +195,19 @@ class InstrumentTest(MPITestCase):
             for det in ob.local_detectors:
                 in_psd = in_model.psd(det)
                 fit_psd = out_model.psd(det)
-                np.testing.assert_array_almost_equal(in_psd.value, fit_psd.value)
+
+                fname = os.path.join(self.outdir, f"fit_{ob.name}_{det}.png")
+                plot_noise_estim_compare(
+                    fname,
+                    in_model.NET(det),
+                    in_model.freq(det),
+                    in_model.psd(det),
+                    in_model.freq(det),
+                    in_model.psd(det),
+                    fit_freq=out_model.freq(det),
+                    fit_psd=out_model.psd(det),
+                )
+
+                np.testing.assert_array_almost_equal(
+                    in_psd.value, fit_psd.value, decimal=2
+                )
